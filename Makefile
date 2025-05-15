@@ -165,6 +165,19 @@ build-cuda-129-base:
 		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
+.PHONY: build-nemo-base
+build-nemo-base:
+	docker buildx build -f Dockerfile-base-nemo \
+		--build-arg BASE_IMAGE="nvcr.io/nvidia/nemo:24.07" \
+		--build-arg PYTHON_VERSION="$(PYTHON_VERSION_310)" \
+		--build-arg UBUNTU_VERSION="$(UBUNTU_VERSION)" \
+		--build-arg HOROVOD_CPU_OPERATIONS="GLOO" \
+		--build-arg "$(MPI_BUILD_ARG)" \
+		--build-arg "$(OFI_BUILD_ARG)" \
+		-t $(DOCKERHUB_REGISTRY)/$(NEMO_BASE_NAME)-$(SHORT_GIT_HASH) \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
+		.
+
 NGC_PYTORCH_PREFIX := nvcr.io/nvidia/pytorch
 NGC_TENSORFLOW_PREFIX := nvcr.io/nvidia/tensorflow
 NGC_PYTORCH_VERSION := 24.03-py3
