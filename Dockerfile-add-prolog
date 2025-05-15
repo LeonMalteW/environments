@@ -1,0 +1,14 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | apt-get update && apt-get install git-lfs
+
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    apt-add-repository ppa:swi-prolog/stable && \
+    apt-get update && \
+    apt-get install -y swi-prolog
+
+RUN apt-get clean && apt-get autoremove -y

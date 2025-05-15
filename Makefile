@@ -5,92 +5,106 @@ SHORT_GIT_HASH := $(shell git rev-parse --short HEAD)
 
 NGC_REGISTRY := nvcr.io/isv-ngc-partner/determined
 NGC_PUBLISH := 1
-export DOCKERHUB_REGISTRY := determinedai
+export DOCKERHUB_REGISTRY := leonmw
 export REGISTRY_REPO := environments
 
+# Python Versions
+PYTHON_VERSION_39 := 3.9.16
+PYTHON_VERSION_310 := 3.10.12
+
+# Ubuntu Versions
+UBUNTU_VERSION := ubuntu22.04
+UBUNTU_IMAGE_TAG := ubuntu:22.04
+UBUNTU_VERSION_1804 := ubuntu18.04
+
+# Suffixes
+CPU_SUFFIX := -cpu
+CUDA_SUFFIX := -cuda
+HPC_SUFFIX := -hpc # Only used when WITH_MPI is 1
+
+# Platform Architectures
+PLATFORM_LINUX_ARM_64 := linux/arm64
+PLATFORM_LINUX_AMD_64 := linux/amd64
+
+# Horovod Settings
+HOROVOD_GPU_OPERATIONS := NCCL
+
+# Build Arguments
+DOCKER_BUILDX_LOAD_PUSH := --push # --load
+
+# Base Image Prefixes
 CPU_PREFIX_39 := $(REGISTRY_REPO):py-3.9-
 CPU_PREFIX_310 := $(REGISTRY_REPO):py-3.10-
 CUDA_113_PREFIX := $(REGISTRY_REPO):cuda-11.3-
 CUDA_118_PREFIX := $(REGISTRY_REPO):cuda-11.8-
+CUDA_129_PREFIX := $(REGISTRY_REPO):cuda-12.9-
+NEMO_PREFIX := $(REGISTRY_REPO):nemo-
+
 ROCM_56_PREFIX := $(REGISTRY_REPO):rocm-5.6-
 ROCM_57_PREFIX := $(REGISTRY_REPO):rocm-5.7-
 ROCM_60_PREFIX := $(REGISTRY_REPO):rocm-6.0-
 ROCM_61_PREFIX := $(REGISTRY_REPO):rocm-6.1-
 ROCM_60_TF_PREFIX := tensorflow-infinity-hub:tensorflow-infinity-hub
 
-
-CPU_SUFFIX := -cpu
-CUDA_SUFFIX := -cuda
+# Artifacts Directory
 ARTIFACTS_DIR := /tmp/artifacts
-PYTHON_VERSION_39 := 3.9.16
-PYTHON_VERSION_310 := 3.10.12
-UBUNTU_VERSION := ubuntu20.04
-UBUNTU_IMAGE_TAG := ubuntu:20.04
-UBUNTU_VERSION_1804 := ubuntu18.04
-PLATFORM_LINUX_ARM_64 := linux/arm64
-PLATFORM_LINUX_AMD_64 := linux/amd64
-HOROVOD_GPU_OPERATIONS := NCCL
 
+# AWS Settings
+export AWS_MAX_ATTEMPTS=360 # Timeout for Packer AWS operations
+
+# Conditional MPI and Horovod Settings
 ifeq "$(WITH_MPI)" "1"
-# 	Don't bother supporting or building arm64+mpi builds.
-	HPC_SUFFIX := -hpc
-	PLATFORMS := $(PLATFORM_LINUX_AMD_64)
-	HOROVOD_WITH_MPI := 1
-	HOROVOD_WITHOUT_MPI := 0
-	HOROVOD_CPU_OPERATIONS := MPI
-	CUDA_SUFFIX := -cuda
-	WITH_AWS_TRACE := 0
-	NCCL_BUILD_ARG := WITH_NCCL
-        ifeq "$(WITH_NCCL)" "1"
-		NCCL_BUILD_ARG := WITH_NCCL=1
-		ifeq "$(WITH_AWS_TRACE)" "1"
-			WITH_AWS_TRACE := 1
-		endif
+    # Don't bother supporting or building arm64+mpi builds.
+    PLATFORMS := $(PLATFORM_LINUX_AMD_64)
+    HOROVOD_WITH_MPI := 1
+    HOROVOD_WITHOUT_MPI := 0
+    HOROVOD_CPU_OPERATIONS := MPI
+    WITH_AWS_TRACE := 0 # Default to 0, overridden if WITH_NCCL and WITH_AWS_TRACE are both 1
+    NCCL_BUILD_ARG := WITH_NCCL # Default, overridden if WITH_NCCL is 1
+    ifeq "$(WITH_NCCL)" "1"
+        NCCL_BUILD_ARG := WITH_NCCL=1
+        ifeq "$(WITH_AWS_TRACE)" "1"
+            WITH_AWS_TRACE := 1
         endif
-	MPI_BUILD_ARG := WITH_MPI=1
+    endif
+    MPI_BUILD_ARG := WITH_MPI=1
 
-	ifeq "$(WITH_OFI)" "1"
-	        CUDA_SUFFIX := -cuda
-		CPU_SUFFIX := -cpu
-		OFI_BUILD_ARG := WITH_OFI=1
-	else
-		CPU_SUFFIX := -cpu
-		OFI_BUILD_ARG := WITH_OFI
-	endif
+    ifeq "$(WITH_OFI)" "1"
+        OFI_BUILD_ARG := WITH_OFI=1
+    else
+        OFI_BUILD_ARG := WITH_OFI
+    endif
 else
-	PLATFORMS := $(PLATFORM_LINUX_AMD_64),$(PLATFORM_LINUX_ARM_64)
-	WITH_MPI := 0
-	OFI_BUILD_ARG := WITH_OFI
-	NCCL_BUILD_ARG := WITH_NCCL
-	HOROVOD_WITH_MPI := 0
-	HOROVOD_WITHOUT_MPI := 1
-	HOROVOD_CPU_OPERATIONS := GLOO
-	MPI_BUILD_ARG := USE_GLOO=1
+    PLATFORMS := $(PLATFORM_LINUX_AMD_64),$(PLATFORM_LINUX_ARM_64)
+    WITH_MPI := 0
+    OFI_BUILD_ARG := WITH_OFI
+    NCCL_BUILD_ARG := WITH_NCCL
+    HOROVOD_WITH_MPI := 0
+    HOROVOD_WITHOUT_MPI := 1
+    HOROVOD_CPU_OPERATIONS := GLOO
+    MPI_BUILD_ARG := USE_GLOO=1
 endif
 
 export CPU_PY_39_BASE_NAME := $(CPU_PREFIX_39)base$(CPU_SUFFIX)
 export CPU_PY_310_BASE_NAME := $(CPU_PREFIX_310)base$(CPU_SUFFIX)
 export CUDA_113_BASE_NAME := $(CUDA_113_PREFIX)base$(CUDA_SUFFIX)
-export CUDA_118_BASE_NAME := $(CUDA_118_PREFIX)base$(CUDA_SUFFIXS)
+export CUDA_118_BASE_NAME := $(CUDA_118_PREFIX)base$(CUDA_SUFFIX)
+export CUDA_129_BASE_NAME := $(CUDA_129_PREFIX)base$(CUDA_SUFFIX)
+export NEMO_BASE_NAME := $(NEMO_PREFIX)base
 
-# Timeout used by packer for AWS operations. Default is 120 (30 minutes) for
-# waiting for AMI availablity. Bump to 360 attempts = 90 minutes.
-export AWS_MAX_ATTEMPTS=360
-
-# Base images.
 .PHONY: build-cpu-py-39-base
 build-cpu-py-39-base:
 	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 	docker buildx create --name builder --driver docker-container --use
 	docker buildx build -f Dockerfile-base-cpu \
-	    --platform "$(PLATFORMS)" \
+		--platform "$(PLATFORMS)" \
 		--build-arg BASE_IMAGE="$(UBUNTU_IMAGE_TAG)" \
 		--build-arg PYTHON_VERSION="$(PYTHON_VERSION_39)" \
 		--build-arg UBUNTU_VERSION="$(UBUNTU_VERSION)" \
 		--build-arg "$(MPI_BUILD_ARG)" \
 		--build-arg "$(OFI_BUILD_ARG)" \
 		-t $(DOCKERHUB_REGISTRY)/$(CPU_PY_39_BASE_NAME)-$(SHORT_GIT_HASH) \
-		--push \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
 .PHONY: build-cpu-py-310-base
@@ -98,14 +112,14 @@ build-cpu-py-310-base:
 	docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 	docker buildx create --name builder --driver docker-container --use
 	docker buildx build -f Dockerfile-base-cpu \
-	    --platform "$(PLATFORMS)" \
+		--platform "$(PLATFORMS)" \
 		--build-arg BASE_IMAGE="$(UBUNTU_IMAGE_TAG)" \
 		--build-arg PYTHON_VERSION="$(PYTHON_VERSION_310)" \
 		--build-arg UBUNTU_VERSION="$(UBUNTU_VERSION)" \
 		--build-arg "$(MPI_BUILD_ARG)" \
 		--build-arg "$(OFI_BUILD_ARG)" \
 		-t $(DOCKERHUB_REGISTRY)/$(CPU_PY_310_BASE_NAME)-$(SHORT_GIT_HASH) \
-		--push \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
 .PHONY: build-cuda-113-base
@@ -119,7 +133,7 @@ build-cuda-113-base:
 		--build-arg "$(OFI_BUILD_ARG)" \
 		--build-arg "$(NCCL_BUILD_ARG)" \
 		-t $(DOCKERHUB_REGISTRY)/$(CUDA_113_BASE_NAME)-$(SHORT_GIT_HASH) \
-		--load \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
 .PHONY: build-cuda-118-base
@@ -133,7 +147,22 @@ build-cuda-118-base:
 		--build-arg "$(OFI_BUILD_ARG)" \
 		--build-arg "$(NCCL_BUILD_ARG)" \
 		-t $(DOCKERHUB_REGISTRY)/$(CUDA_118_BASE_NAME)-$(SHORT_GIT_HASH) \
-		--load \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
+		--builder cloud-leonmw-dev3 \
+		.
+
+.PHONY: build-cuda-129-base
+build-cuda-129-base:
+	docker buildx build -f Dockerfile-base-cuda \
+		--build-arg BASE_IMAGE="nvidia/cuda:12.9.0-cudnn-devel-$(UBUNTU_VERSION)" \
+		--build-arg PYTHON_VERSION="$(PYTHON_VERSION_310)" \
+		--build-arg UBUNTU_VERSION="$(UBUNTU_VERSION)" \
+		--build-arg WITH_AWS_TRACE="$(WITH_AWS_TRACE)" \
+		--build-arg "$(MPI_BUILD_ARG)" \
+		--build-arg "$(OFI_BUILD_ARG)" \
+		--build-arg "$(NCCL_BUILD_ARG)" \
+		-t $(DOCKERHUB_REGISTRY)/$(CUDA_129_BASE_NAME)-$(SHORT_GIT_HASH) \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
 NGC_PYTORCH_PREFIX := nvcr.io/nvidia/pytorch
