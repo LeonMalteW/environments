@@ -37,6 +37,7 @@ CPU_PREFIX_39 := $(REGISTRY_REPO):py-3.9-
 CPU_PREFIX_310 := $(REGISTRY_REPO):py-3.10-
 CUDA_113_PREFIX := $(REGISTRY_REPO):cuda-11.3-
 CUDA_118_PREFIX := $(REGISTRY_REPO):cuda-11.8-
+CUDA_124_PREFIX := $(REGISTRY_REPO):cuda-12.4-
 CUDA_129_PREFIX := $(REGISTRY_REPO):cuda-12.9-
 NEMO_PREFIX := $(REGISTRY_REPO):nemo-
 
@@ -89,6 +90,7 @@ export CPU_PY_39_BASE_NAME := $(CPU_PREFIX_39)base$(CPU_SUFFIX)
 export CPU_PY_310_BASE_NAME := $(CPU_PREFIX_310)base$(CPU_SUFFIX)
 export CUDA_113_BASE_NAME := $(CUDA_113_PREFIX)base$(CUDA_SUFFIX)
 export CUDA_118_BASE_NAME := $(CUDA_118_PREFIX)base$(CUDA_SUFFIX)
+export CUDA_124_BASE_NAME := $(CUDA_124_PREFIX)base$(CUDA_SUFFIX)
 export CUDA_129_BASE_NAME := $(CUDA_129_PREFIX)base$(CUDA_SUFFIX)
 export NEMO_BASE_NAME := $(NEMO_PREFIX)base
 
@@ -148,7 +150,20 @@ build-cuda-118-base:
 		--build-arg "$(NCCL_BUILD_ARG)" \
 		-t $(DOCKERHUB_REGISTRY)/$(CUDA_118_BASE_NAME)-$(SHORT_GIT_HASH) \
 		$(DOCKER_BUILDX_LOAD_PUSH) \
-		--builder cloud-leonmw-dev3 \
+		.
+
+.PHONY: build-cuda-124-base
+build-cuda-124-base:
+	docker buildx build -f Dockerfile-base-cuda \
+		--build-arg BASE_IMAGE="nvidia/cuda:12.4.0-devel-$(UBUNTU_VERSION)" \
+		--build-arg PYTHON_VERSION="$(PYTHON_VERSION_310)" \
+		--build-arg UBUNTU_VERSION="$(UBUNTU_VERSION)" \
+		--build-arg WITH_AWS_TRACE="$(WITH_AWS_TRACE)" \
+		--build-arg "$(MPI_BUILD_ARG)" \
+		--build-arg "$(OFI_BUILD_ARG)" \
+		--build-arg "$(NCCL_BUILD_ARG)" \
+		-t $(DOCKERHUB_REGISTRY)/$(CUDA_124_BASE_NAME)-$(SHORT_GIT_HASH) \
+		$(DOCKER_BUILDX_LOAD_PUSH) \
 		.
 
 .PHONY: build-cuda-129-base
